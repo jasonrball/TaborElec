@@ -275,9 +275,9 @@ def makePulseData():
     
     #Set waveform length
     segLen = 1024 # Signal
-    segLenDC = 512 #DC
+    segLenDC = 1024 #DC
     
-    cycles = 64
+    cycles = 32.58
     time = np.linspace(0, segLen-1, segLen)
     omega = 2 * np.pi * cycles
     dacWave = ampI*np.sin(omega*time/segLen)
