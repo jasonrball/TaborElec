@@ -1,3 +1,9 @@
+### Test Code for UCB NMR program ###
+### by Jason Ball and Mark Elo ###
+
+### Edited by JB, 2023/1/3 ###
+### Split off code from UCR demo and made changes specific to 
+
 import os
 import sys
 import math
@@ -17,70 +23,64 @@ import matplotlib.pyplot as plt
 from matplotlib.widgets import Button, RadioButtons, CheckButtons
 import keyboard
 
-#Init
+#Initialize important values
 breakVal = 0
+bitRate = 8 #9082 AWG requires 8-bit data
 sampleRateDAC = 2.2E9
 sampleRateADC = (sampleRateDAC * 32) / 20 # This ratio is required for clock sync
-numframes, framelen = 1, 4800
+
+numframes, framelen = 1, 4800 # amount of data to be collected from ADC
 totlen = numframes * framelen
-wav1 = np.zeros(framelen, dtype=np.uint16)
-fftPlot = np.zeros(int(framelen/2), dtype=np.uint16)
-xT = np.linspace(0, numframes * framelen,  numframes * framelen )
-xT =  xT/sampleRateADC
-#xF = range(2400)
-dcOff = 50
+wav1 = np.zeros(framelen, dtype=np.uint16) # empty vector for raw ADC data
+fftPlot = np.zeros(int(framelen/2), dtype=np.uint16) # empty vector for FFT data 
+xT = np.linspace(0, numframes * framelen,  numframes * framelen ) #create x-values for ADC
+xT =  xT/sampleRateADC #normalize by sample rate
+dcOff = 50 
 spectrumInv = 0
+
 dacWaveI = []
 dacWaveQ = []
 
 
-# Connect to instrument(LAN)
-# Please choose appropriate address:
-#inst_addr = 'TCPIP::169.254.247.118::5025::SOCKET'
-#inst_addr = 'TCPIP::192.168.0.131::5025::SOCKET'
-#inst_addr = 'TCPIP::192.168.0.226::5025::SOCKET'
+# Connect to instrument(PXI)
+sid = 8 #PXI slot of AWT on chassis
+admin = TepAdmin() #required to control PXI module
+inst = admin.open_instrument(slot_id=sid) 
 
-#inst = TEVisaInst(inst_addr)
-sid = 8 
-admin = TepAdmin()
-inst = admin.open_instrument(slot_id=sid)# Get the instrument's *IDN
+resp = inst.send_scpi_query("*IDN?") # Get the instrument's *IDN
+print('connected to: ' + resp) # Print *IDN
 
+### initializations ###
+inst.send_scpi_cmd('*CLS; *RST')  # reset instrument
 
-resp = inst.send_scpi_query("*IDN?")
-print('connected to: ' + resp)
-
-
-# initializations .. 
-
-inst.send_scpi_cmd('*CLS; *RST')
-inst.send_scpi_cmd(':INST:CHAN 1')
-
-print('CH I DAC Clk Freq {0}'.format(sampleRateDAC))
-cmd = ':FREQ:RAST {0}'.format(sampleRateDAC)
-inst.send_scpi_cmd(cmd)
+### set up channel 1 ###
+inst.send_scpi_cmd(':INST:CHAN 1') # select Ch 1
+print('CH 1 DAC Clk Freq {0}'.format(sampleRateDAC)) # print the DAC clock rate
+cmd = ':FREQ:RAST {0}'.format(sampleRateDAC) 
+inst.send_scpi_cmd(cmd) # set the DAC clock rate on the instrument
 inst.send_scpi_cmd(':INIT:CONT ON')
-inst.send_scpi_cmd(':TRAC:DEL:ALL')
+inst.send_scpi_cmd(':TRAC:DEL:ALL') # delete all existing traces on CH 1
 
+### set up channel 2 ###
 '''
 inst.send_scpi_cmd(':INST:CHAN 2')
-
 print('CH Q DAC Clk Freq {0}'.format(sampleRateDAC))
 cmd = ':FREQ:RAST {0}'.format(sampleRateDAC)
 inst.send_scpi_cmd(cmd)
 inst.send_scpi_cmd(':INIT:CONT ON')
 inst.send_scpi_cmd(':TRAC:DEL:ALL')
 '''
+
 # Setup the digitizer 
-
-inst.send_scpi_cmd(':DIG:MODE SING')
-
-print('ADC Clk Freq {0}'.format(sampleRateADC))
+inst.send_scpi_cmd(':DIG:MODE SING') # no averaging
+print('ADC Clk Freq {0}'.format(sampleRateADC)) # print the ADC clock rate
 cmd = ':DIG:FREQ  {0}'.format(sampleRateADC)
-inst.send_scpi_cmd(cmd)
+inst.send_scpi_cmd(cmd) # set the ADC clock rate on the instrument
 
 # Enable capturing data from channel 1
 inst.send_scpi_cmd(':DIG:CHAN:SEL 1')
 inst.send_scpi_cmd(':DIG:CHAN:STATE ENAB')
+
 # Select the internal-trigger as start-capturing trigger:
 inst.send_scpi_cmd(':DIG:TRIG:SOURCE CPU')
 
@@ -241,10 +241,10 @@ def makeSineData():
     global dacWaveQ
     
     ampI = 1  
-    ampQ = 1
-    max_dac=65535
+    ampQ = 1 
+    max_dac= 2**bitRate - 1
     half_dac=max_dac/2
-    data_type = np.uint16
+    data_type = np.uint8
     
     #Set waveform length
     segLen = 1024 # Signal
@@ -260,9 +260,7 @@ def makeSineData():
     dacWaveI = dacWaveI.astype(data_type)
     
     dacWave = ampQ*np.cos(omega*time/segLen)  
-    
     dacWaveQ = ((dacWave) + 1.0) * half_dac  
-    
     dacWaveQ = dacWaveQ.astype(data_type)
     
 def makePulseData():
@@ -270,10 +268,10 @@ def makePulseData():
     global dacWaveQ
     
     ampI = 1  
-    ampQ = 1  
-    max_dac=65535
+    ampQ = 1 
+    max_dac= 2**bitRate - 1
     half_dac=max_dac/2
-    data_type = np.uint16
+    data_type = np.uint8
     
     #Set waveform length
     segLen = 1024 # Signal
@@ -290,16 +288,14 @@ def makePulseData():
     #Set DC
     dacWaveDC = np.zeros(segLenDC)       
     dacWaveDC = dacWaveDC+(max_dac//2)
-    dacWaveDC = dacWaveDC.astype(np.uint16)
+    dacWaveDC = dacWaveDC.astype(np.uint8)
     
     dacWaveI = np.concatenate([dacWaveI, dacWaveDC])
     
     dacWave = ampQ*np.cos(omega*time/segLen)  
     
     dacWaveQ = ((dacWave) + 1.0) * half_dac  
-    
     dacWaveQ = dacWaveQ.astype(data_type)
-    
     dacWaveQ = np.concatenate([dacWaveQ, dacWaveDC])
     
 def makeGausPulseData():
@@ -308,9 +304,9 @@ def makeGausPulseData():
     
     ampI = 1  
     ampQ = 1 
-    max_dac=65535
+    max_dac= 2**bitRate - 1
     half_dac=max_dac/2
-    data_type = np.uint16
+    data_type = np.uint8
     
     #Set waveform length
     segLen = 1024 # Signal
@@ -331,20 +327,17 @@ def makeGausPulseData():
     #Set DC
     dacWaveDC = np.zeros(segLenDC)       
     dacWaveDC = dacWaveDC+(max_dac//2)
-    dacWaveDC = dacWaveDC.astype(np.uint16)
+    dacWaveDC = dacWaveDC.astype(np.uint8)
     
     dacWaveI = np.concatenate([dacWaveI, dacWaveDC])
     
     dacWave = ampQ*np.cos(omega*time/segLen)  
     
     dacWaveQ = ((dacWave * modWave) + 1.0) * half_dac  
-    
     dacWaveQ = dacWaveQ.astype(data_type)
-    
     dacWaveQ = np.concatenate([dacWaveQ, dacWaveDC])
 
-
-def downLoad_IQ_DUC_low():
+def downLoad_Waveform():
     global dacWaveI
     global dacWaveQ
     
@@ -383,173 +376,7 @@ def downLoad_IQ_DUC_low():
     inst.send_scpi_cmd(cmd)
 
 
-def downLoad_IQ_DUC_high():
-    global dacWaveI
-    global dacWaveQ
-    
-    arr_tuple = (dacWaveI, dacWaveQ)
-    dacWaveIQ = np.vstack(arr_tuple).reshape((-1,), order='F')
-    
-    #dacWaveIQ = dacWaveI
-    
-    ch=1
-    segnum = 1
-
-    # Select channel
-    cmd = ':INST:CHAN {0}'.format(ch)
-    inst.send_scpi_cmd(cmd)
-
-    # Define segment
-    cmd = ':TRAC:DEF {0}, {1}'.format(segnum, len(dacWaveIQ))
-    inst.send_scpi_cmd(cmd)
-
-    # Select the segment
-    cmd = ':TRAC:SEL {0}'.format(segnum)
-    inst.send_scpi_cmd(cmd)
-
-    # Increase the timeout before writing binary-data:
-    inst.timeout = 30000
-    # Send the binary-data with *OPC? added to the beginning of its prefix.
-    inst.write_binary_data('*OPC?; :TRAC:DATA', dacWaveIQ)
-    # Set normal timeout
-    inst.timeout = 10000
-
-    resp = inst.send_scpi_query(':SYST:ERR?')
-    print(resp)
-    
-    # cmd = ':SOUR:INT x4'
-    # #cmd = ':SOUR:INT x8'
-    # rc = inst.send_scpi_cmd(cmd)
-
-    # sampleRateDAC = 8E8
-    # print('Sample Clk Freq {0}'.format(sampleRateDAC))
-    # cmd = ':FREQ:RAST {0}'.format(sampleRateDAC)
-    # rc = inst.send_scpi_cmd(cmd)
-
-    cmd = ':SOUR:MODE DUC'
-    rc = inst.send_scpi_cmd(cmd)
-
-    cmd = ':SOUR:IQM ONE'
-    rc = inst.send_scpi_cmd(cmd)
-
-    cmd = ':SOUR:NCO:CFR1 0.5E9'
-    rc = inst.send_scpi_cmd(cmd)
-
-    cmd = ':SOUR:SIXD OFF'
-    rc = inst.send_scpi_cmd(cmd)
-
-    cmd = ':OUTP ON'
-    inst.send_scpi_cmd(cmd)
-
-def downLoad_I():
-    global dacWaveI
-    
-    ch=1
-    segnum = 1
-
-    # Select channel
-    cmd = ':INST:CHAN {0}'.format(ch)
-    inst.send_scpi_cmd(cmd)
-
-    # Define segment
-    cmd = ':TRAC:DEF {0}, {1}'.format(segnum, len(dacWaveI))
-    inst.send_scpi_cmd(cmd)
-
-    # Select the segment
-    cmd = ':TRAC:SEL {0}'.format(segnum)
-    inst.send_scpi_cmd(cmd)
-
-    # Increase the timeout before writing binary-data:
-    inst.timeout = 30000
-    # Send the binary-data with *OPC? added to the beginning of its prefix.
-    inst.write_binary_data('*OPC?; :TRAC:DATA', dacWaveI)
-    # Set normal timeout
-    inst.timeout = 10000
-
-    resp = inst.send_scpi_query(':SYST:ERR?')
-    print(resp)
-
-    cmd = ':OUTP ON'
-    inst.send_scpi_cmd(cmd)
-
-def downLoad_Q():
-    global dacWaveQ
-    
-    ch=3
-    segnum = 2
-
-    # Select channel
-    cmd = ':INST:CHAN {0}'.format(ch)
-    inst.send_scpi_cmd(cmd)
-
-    # Define segment
-    cmd = ':TRAC:DEF {0}, {1}'.format(segnum, len(dacWaveQ))
-    inst.send_scpi_cmd(cmd)
-
-    # Select the segment
-    cmd = ':TRAC:SEL {0}'.format(segnum)
-    inst.send_scpi_cmd(cmd)
-
-    # Increase the timeout before writing binary-data:
-    inst.timeout = 30000
-    # Send the binary-data with *OPC? added to the beginning of its prefix.
-    inst.write_binary_data('*OPC?; :TRAC:DATA', dacWaveQ)
-    # Set normal timeout
-    inst.timeout = 10000
-
-    resp = inst.send_scpi_query(':SYST:ERR?')
-    print(resp)
-    
-    cmd = ':OUTP ON'
-    inst.send_scpi_cmd(cmd)
-    
-def setTaskIQ():
-   
-    ch=1
-    # I channel
-    cmd = ':INST:CHAN {0}'.format(ch)
-    inst.send_scpi_cmd(cmd)
-
-    cmd = ':TASK:COMP:LENG 1'
-    inst.send_scpi_cmd(cmd)
-     
-    cmd = ':TASK:COMP:SEL 1' 
-    inst.send_scpi_cmd(cmd)
-    cmd = ':TASK:COMP:SEGM 1'
-    inst.send_scpi_cmd(cmd)
-    cmd = ':TASK:COMP:DTR ON'
-    inst.send_scpi_cmd(cmd)
-    cmd = ':TASK:COMP:NEXT1 1'
-    inst.send_scpi_cmd(cmd)
-    
-    cmd = ':TASK:COMP:WRITE'
-    inst.send_scpi_cmd(cmd)
-    cmd = ':SOUR:FUNC:MODE TASK'
-    inst.send_scpi_cmd(cmd)
-    
-    ch=2
-    # Q channel
-    cmd = ':INST:CHAN {0}'.format(ch)
-    inst.send_scpi_cmd(cmd)
-
-    cmd = ':TASK:COMP:LENG 1'
-    inst.send_scpi_cmd(cmd)
-     
-    cmd = ':TASK:COMP:SEL 1' 
-    inst.send_scpi_cmd(cmd)
-    cmd = ':TASK:COMP:SEGM 2'
-    inst.send_scpi_cmd(cmd)
-    cmd = ':TASK:COMP:DTR ON'
-    inst.send_scpi_cmd(cmd)
-    cmd = ':TASK:COMP:NEXT1 1'
-    inst.send_scpi_cmd(cmd)
-    
-    cmd = ':TASK:COMP:WRITE'
-    inst.send_scpi_cmd(cmd)
-    cmd = ':SOUR:FUNC:MODE TASK'
-    inst.send_scpi_cmd(cmd)  
-
-def setTaskDUC():
+def setTask():
    
     ch=1
     #Direct RF Output CH
@@ -566,6 +393,8 @@ def setTaskDUC():
     cmd = ':TASK:COMP:DTR ON'
     inst.send_scpi_cmd(cmd)
     cmd = ':TASK:COMP:NEXT1 1'
+    inst.send_scpi_cmd(cmd)
+    cmd = ':TASK:COMP:LOOP 10'
     inst.send_scpi_cmd(cmd)
     
     cmd = ':TASK:COMP:WRITE'
@@ -623,23 +452,15 @@ def aquireData():
     del wav1
     del fftPlot
 
-
+# -------- Generate Waveforms ----------
 makeSineData()
 #makePulseData()
 #makeGausPulseData()
 
-# -------- Low Band ----------
-downLoad_IQ_DUC_low()
-setTaskDUC()
+# -------- Send to AWT ----------
+downLoad_Waveform()
+setTask()
 
-# -------- High Band ----------
-#ownLoad_IQ_DUC_high()
-#setTaskDUC()
-
-# -------- Two-channel IQ ----------
-# downLoad_I()
-# downLoad_Q()
-# setTaskIQ()
 
 while True:
     try:
