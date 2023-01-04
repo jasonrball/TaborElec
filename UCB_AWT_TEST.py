@@ -266,18 +266,20 @@ def makeSineData():
 def makePulseData():
     global dacWaveI
     global dacWaveQ
+    global markerDat
     
     ampI = 1  
     ampQ = 1 
     max_dac= 2**bitRate - 1
     half_dac=max_dac/2
     data_type = np.uint8
+    modFreq = 70e6
     
     #Set waveform length
     segLen = 1024 # Signal
     segLenDC = 1024 #DC
     
-    cycles = 32.58
+    cycles = modFreq * 1024 / sampleRateDAC
     time = np.linspace(0, segLen-1, segLen)
     omega = 2 * np.pi * cycles
     dacWave = ampI*np.sin(omega*time/segLen)
@@ -297,6 +299,11 @@ def makePulseData():
     dacWaveQ = ((dacWave) + 1.0) * half_dac  
     dacWaveQ = dacWaveQ.astype(data_type)
     dacWaveQ = np.concatenate([dacWaveQ, dacWaveDC])
+    
+    markerOn = np.ones(segLen)
+    markerOff = np.zeros(segLenDC)
+    
+    markerDat = np.concatenate([markerOn, markerOff])    
     
 def makeGausPulseData():
     global dacWaveI
@@ -340,6 +347,7 @@ def makeGausPulseData():
 def downLoad_Waveform():
     global dacWaveI
     global dacWaveQ
+    global markerDat
     
     #arr_tuple = (dacWaveI, dacWaveQ)
     #dacWaveIQ = np.vstack(arr_tuple).reshape((-1,), order='F')
@@ -348,6 +356,7 @@ def downLoad_Waveform():
     
     ch=1
     segnum = 1
+    withMarker = True
     
     # Select channel
     cmd = ':INST:CHAN {0}'.format(ch)
@@ -361,13 +370,28 @@ def downLoad_Waveform():
     cmd = ':TRAC:SEL {0}'.format(segnum)
     inst.send_scpi_cmd(cmd)
 
+    cmd = ':'
+    
     # Increase the timeout before writing binary-data:
     inst.timeout = 30000
     # Send the binary-data with *OPC? added to the beginning of its prefix.
     inst.write_binary_data('*OPC?; :TRAC:DATA', dacWaveIQ)
+    
+    if withMarker:
+        cmd = ':MARK:SEL 1'
+        inst.send_scpi_cmd(cmd)
+        
+        cmd = ':MARK:LEV 1.0'
+        inst.send_scpi_cmd(cmd)
+        
+        inst.write_binary_data('*OPC?; :MARK:DATA', markerDat)
+        
+    inst.write_binary_data('*OPC?; :TRAC:DATA', dacWaveIQ)
     # Set normal timeout
     inst.timeout = 10000
-
+    
+    
+    
     resp = inst.send_scpi_query(':SYST:ERR?')
     print(resp)
     
