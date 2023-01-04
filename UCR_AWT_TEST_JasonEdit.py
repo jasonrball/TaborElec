@@ -45,7 +45,6 @@ sid = 8
 admin = TepAdmin()
 inst = admin.open_instrument(slot_id=sid)# Get the instrument's *IDN
 
-
 resp = inst.send_scpi_query("*IDN?")
 print('connected to: ' + resp)
 

@@ -453,8 +453,8 @@ def aquireData():
     del fftPlot
 
 # -------- Generate Waveforms ----------
-makeSineData()
-#makePulseData()
+#makeSineData()
+makePulseData()
 #makeGausPulseData()
 
 # -------- Send to AWT ----------
