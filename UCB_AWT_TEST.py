@@ -203,7 +203,7 @@ ax1[0].grid()
 ax1[1].set(xlabel='Frequency', ylabel='FFT Amplitude')
 ax1[1].set_position([0.2, 0.1, 0.7, 0.35]) #x, y, w, h]
 ax1[1].set_ylim([0,1000])
-ax1[1].set_xlim([0,60e6])
+ax1[1].set_xlim([0,100e6])
 ax1[1].set(facecolor = "black")
 ax1[1].grid()
 
@@ -368,9 +368,7 @@ def downLoad_Waveform(ch=1, segnum=1):
     
     
     dacWaveIQ = dacWaveI
-    
-    ch=1
-    segnum = 1
+
     
     # Select channel
     cmd = ':INST:CHAN {0}'.format(ch)
@@ -390,13 +388,12 @@ def downLoad_Waveform(ch=1, segnum=1):
     inst.timeout = 30000
     # Send the binary-data with *OPC? added to the beginning of its prefix.
     inst.write_binary_data('*OPC?; :TRAC:DATA', dacWaveIQ)
-    
 
     cmd = ':MARK:SEL 1'
     inst.send_scpi_cmd(cmd)
     
-    cmd = ':MARK:LEV 1.0'
-    inst.send_scpi_cmd(cmd)
+    #cmd = ':MARK:LEV 1.0'
+    #inst.send_scpi_cmd(cmd)
     
     inst.write_binary_data('*OPC?; :MARK:DATA', markerDat)
         
@@ -442,7 +439,7 @@ def setTask():
     inst.send_scpi_cmd(cmd)
     cmd = ':TASK:COMP:LOOP 3'
     inst.send_scpi_cmd(cmd)
-    
+
     
     cmd = ':TASK:COMP:WRITE'
     inst.send_scpi_cmd(cmd)
