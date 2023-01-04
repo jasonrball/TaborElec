@@ -35,7 +35,7 @@ wav1 = np.zeros(framelen, dtype=np.uint16) # empty vector for raw ADC data
 fftPlot = np.zeros(int(framelen/2), dtype=np.uint16) # empty vector for FFT data 
 xT = np.linspace(0, numframes * framelen,  numframes * framelen ) #create x-values for ADC
 xT =  xT/sampleRateADC #normalize by sample rate
-dcOff = 50 
+dcOff = 0 
 spectrumInv = 0
 
 dacWaveI = []
@@ -263,6 +263,23 @@ def makeSineData():
     dacWaveQ = ((dacWave) + 1.0) * half_dac  
     dacWaveQ = dacWaveQ.astype(data_type)
     
+def makeTriggerMarker():
+    # makes a marker with no associated waveform
+    global dacWaveI
+    global dacWaveQ
+    global markerDat
+    
+    #Set marker length
+    segLenOn = 1024 # Signal
+    segLenOff = 0
+      
+    markerOn = np.ones(segLenOn)
+    markerOff = np.zeros(segLenOff)
+    
+    markerDat = np.concatenate([markerOn, markerOff])    
+    dacWaveI = 0*markerDat
+    dacWaveQ = dacWaveI    
+    
 def makePulseData():
     global dacWaveI
     global dacWaveQ
@@ -300,7 +317,7 @@ def makePulseData():
     dacWaveQ = dacWaveQ.astype(data_type)
     dacWaveQ = np.concatenate([dacWaveQ, dacWaveDC])
     
-    markerOn = np.ones(segLen)
+    markerOn = np.zeros(segLen)
     markerOff = np.zeros(segLenDC)
     
     markerDat = np.concatenate([markerOn, markerOff])    
@@ -344,19 +361,16 @@ def makeGausPulseData():
     dacWaveQ = dacWaveQ.astype(data_type)
     dacWaveQ = np.concatenate([dacWaveQ, dacWaveDC])
 
-def downLoad_Waveform():
+def downLoad_Waveform(ch=1, segnum=1):
     global dacWaveI
     global dacWaveQ
     global markerDat
     
-    #arr_tuple = (dacWaveI, dacWaveQ)
-    #dacWaveIQ = np.vstack(arr_tuple).reshape((-1,), order='F')
     
     dacWaveIQ = dacWaveI
     
     ch=1
     segnum = 1
-    withMarker = True
     
     # Select channel
     cmd = ':INST:CHAN {0}'.format(ch)
@@ -377,24 +391,21 @@ def downLoad_Waveform():
     # Send the binary-data with *OPC? added to the beginning of its prefix.
     inst.write_binary_data('*OPC?; :TRAC:DATA', dacWaveIQ)
     
-    if withMarker:
-        cmd = ':MARK:SEL 1'
-        inst.send_scpi_cmd(cmd)
-        
-        cmd = ':MARK:LEV 1.0'
-        inst.send_scpi_cmd(cmd)
-        
-        inst.write_binary_data('*OPC?; :MARK:DATA', markerDat)
+
+    cmd = ':MARK:SEL 1'
+    inst.send_scpi_cmd(cmd)
+    
+    cmd = ':MARK:LEV 1.0'
+    inst.send_scpi_cmd(cmd)
+    
+    inst.write_binary_data('*OPC?; :MARK:DATA', markerDat)
         
     inst.write_binary_data('*OPC?; :TRAC:DATA', dacWaveIQ)
     # Set normal timeout
     inst.timeout = 10000
     
-    
-    
     resp = inst.send_scpi_query(':SYST:ERR?')
     print(resp)
-    
 
     cmd = ':OUTP ON'
     inst.send_scpi_cmd(cmd)
@@ -407,7 +418,7 @@ def setTask():
     cmd = ':INST:CHAN {0}'.format(ch)
     inst.send_scpi_cmd(cmd)
 
-    cmd = ':TASK:COMP:LENG 1'
+    cmd = ':TASK:COMP:LENG 2'
     inst.send_scpi_cmd(cmd)
      
     cmd = ':TASK:COMP:SEL 1' 
@@ -416,10 +427,22 @@ def setTask():
     inst.send_scpi_cmd(cmd)
     cmd = ':TASK:COMP:DTR ON'
     inst.send_scpi_cmd(cmd)
+    cmd = ':TASK:COMP:NEXT1 2'
+    inst.send_scpi_cmd(cmd)
+    cmd = ':TASK:COMP:LOOP 1'
+    inst.send_scpi_cmd(cmd)
+    
+    cmd = ':TASK:COMP:SEL 2' 
+    inst.send_scpi_cmd(cmd)
+    cmd = ':TASK:COMP:SEGM 1'
+    inst.send_scpi_cmd(cmd)
+    cmd = ':TASK:COMP:DTR OFF'
+    inst.send_scpi_cmd(cmd)
     cmd = ':TASK:COMP:NEXT1 1'
     inst.send_scpi_cmd(cmd)
-    cmd = ':TASK:COMP:LOOP 10'
+    cmd = ':TASK:COMP:LOOP 3'
     inst.send_scpi_cmd(cmd)
+    
     
     cmd = ':TASK:COMP:WRITE'
     inst.send_scpi_cmd(cmd)
@@ -477,12 +500,13 @@ def aquireData():
     del fftPlot
 
 # -------- Generate Waveforms ----------
-#makeSineData()
+makeTriggerMarker()
+downLoad_Waveform(ch=1, segnum=1)
 makePulseData()
-#makeGausPulseData()
+downLoad_Waveform(ch=1, segnum=2)
 
 # -------- Send to AWT ----------
-downLoad_Waveform()
+
 setTask()
 
 
