@@ -35,7 +35,7 @@ wav1 = np.zeros(framelen, dtype=np.uint16) # empty vector for raw ADC data
 fftPlot = np.zeros(int(framelen/2), dtype=np.uint16) # empty vector for FFT data 
 xT = np.linspace(0, numframes * framelen,  numframes * framelen ) #create x-values for ADC
 xT =  xT/sampleRateADC #normalize by sample rate
-dcOff = 0 
+dcOff = 50 
 spectrumInv = 0
 
 dacWaveI = []
@@ -269,16 +269,23 @@ def makeTriggerMarker():
     global dacWaveQ
     global markerDat
     
-    #Set marker length
-    segLenOn = 1024 # Signal
-    segLenOff = 0
-      
-    markerOn = np.ones(segLenOn)
-    markerOff = np.zeros(segLenOff)
+
+    max_dac= 2**bitRate - 1
+    half_dac=max_dac/2
+    data_type = np.uint8
     
-    markerDat = np.concatenate([markerOn, markerOff])    
-    dacWaveI = 0*markerDat
-    dacWaveQ = dacWaveI    
+    #Set marker length
+    segLenOn = 512 # Signal
+
+    dacWave = np.zeros(segLenOn)
+    dacWaveI = ((dacWave) + 1.0) * half_dac  
+    dacWaveI = dacWaveI.astype(data_type)    
+    daceWaveQ = dacWaveI
+    
+    markerOn = np.ones(int(segLenOn/8))
+    markerDat = ((markerOn) + 1.0) * half_dac
+
+    markerDat = markerDat.astype(data_type)
     
 def makePulseData():
     global dacWaveI
@@ -296,7 +303,7 @@ def makePulseData():
     segLen = 1024 # Signal
     segLenDC = 1024 #DC
     
-    cycles = modFreq * 1024 / sampleRateDAC
+    cycles = modFreq * segLen / sampleRateDAC
     time = np.linspace(0, segLen-1, segLen)
     omega = 2 * np.pi * cycles
     dacWave = ampI*np.sin(omega*time/segLen)
@@ -317,10 +324,14 @@ def makePulseData():
     dacWaveQ = dacWaveQ.astype(data_type)
     dacWaveQ = np.concatenate([dacWaveQ, dacWaveDC])
     
-    markerOn = np.zeros(segLen)
-    markerOff = np.zeros(segLenDC)
+    markerOn = np.zeros(int(segLen/8))
+    markerOn = ((markerOn) + 1.0) * half_dac
+    
+    markerOff = np.zeros(int(segLenDC/8))
+    markerOff = ((markerOff) + 1.0) * half_dac 
     
     markerDat = np.concatenate([markerOn, markerOff])    
+    markerDat = markerDat.astype(data_type)
     
 def makeGausPulseData():
     global dacWaveI
@@ -361,11 +372,10 @@ def makeGausPulseData():
     dacWaveQ = dacWaveQ.astype(data_type)
     dacWaveQ = np.concatenate([dacWaveQ, dacWaveDC])
 
-def downLoad_Waveform(ch=1, segnum=1):
+def downLoad_Waveform(ch, segnum):
     global dacWaveI
     global dacWaveQ
     global markerDat
-    
     
     dacWaveIQ = dacWaveI
 
@@ -381,8 +391,6 @@ def downLoad_Waveform(ch=1, segnum=1):
     # Select the segment
     cmd = ':TRAC:SEL {0}'.format(segnum)
     inst.send_scpi_cmd(cmd)
-
-    cmd = ':'
     
     # Increase the timeout before writing binary-data:
     inst.timeout = 30000
@@ -391,19 +399,16 @@ def downLoad_Waveform(ch=1, segnum=1):
 
     cmd = ':MARK:SEL 1'
     inst.send_scpi_cmd(cmd)
-    
-    #cmd = ':MARK:LEV 1.0'
-    #inst.send_scpi_cmd(cmd)
-    
-    inst.write_binary_data('*OPC?; :MARK:DATA', markerDat)
-        
-    inst.write_binary_data('*OPC?; :TRAC:DATA', dacWaveIQ)
+    inst.write_binary_data('*OPC?; :MARK:DATA', markerDat)    
+
     # Set normal timeout
     inst.timeout = 10000
     
     resp = inst.send_scpi_query(':SYST:ERR?')
     print(resp)
-
+    
+    cmd = ':MARK ON'
+    inst.send_scpi_cmd(cmd)
     cmd = ':OUTP ON'
     inst.send_scpi_cmd(cmd)
 
@@ -415,7 +420,7 @@ def setTask():
     cmd = ':INST:CHAN {0}'.format(ch)
     inst.send_scpi_cmd(cmd)
 
-    cmd = ':TASK:COMP:LENG 2'
+    cmd = ':TASK:COMP:LENG 1'
     inst.send_scpi_cmd(cmd)
      
     cmd = ':TASK:COMP:SEL 1' 
@@ -424,23 +429,23 @@ def setTask():
     inst.send_scpi_cmd(cmd)
     cmd = ':TASK:COMP:DTR ON'
     inst.send_scpi_cmd(cmd)
-    cmd = ':TASK:COMP:NEXT1 2'
-    inst.send_scpi_cmd(cmd)
+    #cmd = ':TASK:COMP:NEXT1 2'
+    #inst.send_scpi_cmd(cmd)
     cmd = ':TASK:COMP:LOOP 1'
     inst.send_scpi_cmd(cmd)
-    
+    '''
     cmd = ':TASK:COMP:SEL 2' 
-    inst.send_scpi_cmd(cmd)
-    cmd = ':TASK:COMP:SEGM 1'
+    #inst.send_scpi_cmd(cmd)
+    cmd = ':TASK:COMP:SEGM 2'
     inst.send_scpi_cmd(cmd)
     cmd = ':TASK:COMP:DTR OFF'
     inst.send_scpi_cmd(cmd)
     cmd = ':TASK:COMP:NEXT1 1'
     inst.send_scpi_cmd(cmd)
-    cmd = ':TASK:COMP:LOOP 3'
+    cmd = ':TASK:COMP:LOOP 1'
     inst.send_scpi_cmd(cmd)
 
-    
+    '''
     cmd = ':TASK:COMP:WRITE'
     inst.send_scpi_cmd(cmd)
     cmd = ':SOUR:FUNC:MODE TASK'
@@ -500,11 +505,11 @@ def aquireData():
 makeTriggerMarker()
 downLoad_Waveform(ch=1, segnum=1)
 makePulseData()
-downLoad_Waveform(ch=1, segnum=2)
+downLoad_Waveform(ch=1, segnum=1)
 
 # -------- Send to AWT ----------
 
-setTask()
+#setTask()
 
 
 while True:

@@ -37,14 +37,14 @@ dacWaveQ = []
 # Connect to instrument(LAN)
 # Please choose appropriate address:
 #inst_addr = 'TCPIP::169.254.247.118::5025::SOCKET'
-#inst_addr = 'TCPIP::192.168.0.131::5025::SOCKET'
+inst_addr = 'TCPIP::192.168.1.22::5025::SOCKET'
 #inst_addr = 'TCPIP::192.168.0.226::5025::SOCKET'
 
-#inst = TEVisaInst(inst_addr)
-sid = 8 
-admin = TepAdmin()
-inst = admin.open_instrument(slot_id=sid)# Get the instrument's *IDN
-
+inst = TEVisaInst(inst_addr)
+#sid = 8 
+#admin = TepAdmin()
+#inst = admin.open_instrument(slot_id=sid)# Get the instrument's *IDN
+inst = TEVisaInst(inst_addr)
 resp = inst.send_scpi_query("*IDN?")
 print('connected to: ' + resp)
 
@@ -248,7 +248,7 @@ def makeSineData():
     #Set waveform length
     segLen = 1024 # Signal
     
-    cycles = 20
+    cycles = 10
     time = np.linspace(0, segLen-1, segLen)
     omega = 2 * np.pi * cycles
     dacWave = ampI*np.sin(omega*time/segLen)

@@ -34,9 +34,9 @@ dacWaveQ = []
 
 # Connect to instrument
 # Please choose appropriate address:
-inst_addr = 'TCPIP::169.254.247.118::5025::SOCKET'
+#inst_addr = 'TCPIP::169.254.247.118::5025::SOCKET'
 #inst_addr = 'TCPIP::192.168.71.1::5025::SOCKET'
-#inst_addr = 'TCPIP::192.168.0.131::5025::SOCKET'
+inst_addr = 'TCPIP::192.168.1.22::5025::SOCKET' #Proteus 9484 in office 
 #inst_addr = 'TCPIP::192.168.0.226::5025::SOCKET'
 
 inst = TEVisaInst(inst_addr)
@@ -570,8 +570,8 @@ makeSineData()
 #makeGausPulseData()
 
 # -------- Low Band ----------
-#downLoad_IQ_DUC()
-#setTaskDUC()
+downLoad_IQ_DUC()
+setTaskDUC()
 
 # -------- High Band ----------
 # downLoad_I()
