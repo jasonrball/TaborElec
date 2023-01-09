@@ -19,20 +19,24 @@ import keyboard
 
 #Init
 breakVal = 0
+dcOff = 50
+spectrumInv = 0
+
+#Set rates for DAC and ADC
 sampleRateDAC = 2.2E9
 sampleRateADC = (sampleRateDAC * 32) / 20 # This ratio is required for clock sync
+
+#Set number of frames to be collected
 numframes, framelen = 1, 4800
 totlen = numframes * framelen
+
+#Preallocate
 wav1 = np.zeros(framelen, dtype=np.uint16)
 fftPlot = np.zeros(int(framelen/2), dtype=np.uint16)
 xT = np.linspace(0, numframes * framelen,  numframes * framelen )
 xT =  xT/sampleRateADC
-#xF = range(2400)
-dcOff = 50
-spectrumInv = 0
 dacWaveI = []
 dacWaveQ = []
-
 
 # Connect to instrument(PXI)
 sid = 4 #PXI slot of AWT on chassis
@@ -46,6 +50,8 @@ print('connected to: ' + resp) # Print *IDN
 # initializations .. 
 
 inst.send_scpi_cmd('*CLS; *RST')
+
+#AWG channel 1
 inst.send_scpi_cmd(':INST:CHAN 1')
 
 print('CH I DAC Clk Freq {0}'.format(sampleRateDAC))
@@ -54,7 +60,7 @@ inst.send_scpi_cmd(cmd)
 inst.send_scpi_cmd(':INIT:CONT ON')
 inst.send_scpi_cmd(':TRAC:DEL:ALL')
 
-
+#AWG channel 2
 inst.send_scpi_cmd(':INST:CHAN 2')
 
 print('CH Q DAC Clk Freq {0}'.format(sampleRateDAC))
@@ -422,7 +428,7 @@ def downLoad_IQ_DUC_high():
     cmd = ':SOUR:IQM ONE'
     rc = inst.send_scpi_cmd(cmd)
 
-    cmd = ':SOUR:NCO:CFR1 0.5E9'
+    cmd = ':SOUR:NCO:CFR1 1E9'
     rc = inst.send_scpi_cmd(cmd)
 
     cmd = ':SOUR:SIXD OFF'
@@ -616,21 +622,21 @@ def acquireData():
 
 
 #makeSineData()
-#makePulseData()
-makeGaussPulseData()
+makePulseData()
+#makeGaussPulseData()
 
 # -------- Low Band ----------
 #downLoad_IQ_DUC_low()
 #setTaskDUC()
 
 # -------- High Band ----------
-#ownLoad_IQ_DUC_high()
-#setTaskDUC()
+downLoad_IQ_DUC_high()
+setTaskDUC()
 
 # -------- Two-channel IQ ----------
-downLoad_I()
-downLoad_Q()
-setTaskIQ()
+#downLoad_I()
+#downLoad_Q()
+#setTaskIQ()
 
 while True:
     try:
