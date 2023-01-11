@@ -591,3 +591,5 @@ while True:
         
     except:
         break
+    
+inst.close_instrument()
