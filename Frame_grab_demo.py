@@ -61,16 +61,6 @@ inst.send_scpi_cmd(cmd)
 inst.send_scpi_cmd(':INIT:CONT ON')
 inst.send_scpi_cmd(':TRAC:DEL:ALL')
 
-
-#AWG channel 2
-print('Setting up CH 1...') 
-inst.send_scpi_cmd(':INST:CHAN 2')
-print('CH Q DAC Clk Freq {0}'.format(sampleRateDAC))
-cmd = ':FREQ:RAST {0}'.format(sampleRateDAC)
-inst.send_scpi_cmd(cmd)
-inst.send_scpi_cmd(':INIT:CONT ON')
-inst.send_scpi_cmd(':TRAC:DEL:ALL')
-
 # Setup the digitizer 
 print('Setting up Digitizer..') 
 inst.send_scpi_cmd(':DIG:MODE SING') #set digitizer mode (single or double)
@@ -83,63 +73,18 @@ inst.send_scpi_cmd(':DIG:CHAN:SEL 1') #Select channel 1
 inst.send_scpi_cmd(':DIG:CHAN:STATE ENAB') #Enable channel 1
 # Select the internal-trigger as start-capturing trigger:
 inst.send_scpi_cmd(':DIG:TRIG:SOURCE CPU')
-cmd = ':DIG:ACQuire:FRAM:DEF {0},{1}'.format(numframes, framelen)
-inst.send_scpi_cmd(cmd)
+
 
 # Select the frames for the capturing 
 # (all the four frames in this example)
-capture_first, capture_count = 1, numframes
-cmd = ':DIG:ACQuire:FRAM:CAPT {0},{1}'.format(capture_first, capture_count)
-inst.send_scpi_cmd(cmd)
 
-# Choose which frames to read (all in this example)
-inst.send_scpi_cmd(':DIG:DATA:SEL 1')
-
-# Choose what to read 
-# (only the frame-data without the header in this example)
-inst.send_scpi_cmd(':DIG:DATA:TYPE FRAM')
-
-# Get the total data size (in bytes)
-resp = inst.send_scpi_query(':DIG:DATA:SIZE?')
-num_bytes = np.uint32(resp)
-print('Total read size in bytes: ' + resp)
-
-
-def makeSineData():
-    global dacWaveI
-    global dacWaveQ
-    
-    ampI = 1  
-    ampQ = 1
-    max_dac=65535
-    half_dac=max_dac/2
-    data_type = np.uint16
-    
-    #Set waveform length
-    segLen = 1024 # Signal
-    
-    cycles = 10
-    time = np.linspace(0, segLen-1, segLen)
-    omega = 2 * np.pi * cycles
-    dacWave = ampI*np.cos(omega*time/segLen)
-    
-    print('Frequency {0} Hz'.format(sampleRateDAC*cycles/segLen))
-   
-    dacWaveI = ((dacWave) + 1.0) * half_dac  
-    dacWaveI = dacWaveI.astype(data_type)
-    
-    dacWave = ampQ*np.sin(omega*time/segLen)  
-    
-    dacWaveQ = ((dacWave) + 1.0) * half_dac  
-    
-    dacWaveQ = dacWaveQ.astype(data_type)
     
 def makePulseData(cycles = 10):
     global dacWaveI
     global dacWaveQ
     
-    ampI = 1  
-    ampQ = 1  
+    ampI = 0.9  
+    ampQ = 0.9  
     max_dac=65535
     half_dac=max_dac/2
     data_type = np.uint16
@@ -324,6 +269,8 @@ def setTaskDUC():
     inst.send_scpi_cmd(cmd)
     cmd = ':TASK:COMP:NEXT1 1'
     inst.send_scpi_cmd(cmd)
+    cmd = ':TASK:COMP:DTR ON'
+    inst.send_scpi_cmd(cmd)
     
     cmd = ':TASK:COMP:WRITE'
     inst.send_scpi_cmd(cmd)
@@ -331,9 +278,28 @@ def setTaskDUC():
     inst.send_scpi_cmd(cmd)         
     
 def acquireData():
-    wav1 = np.zeros(framelen, dtype=np.uint16)
-    wavFFT = np.zeros(framelen, dtype=np.uint16)
+    cmd = ':DIG:ACQuire:FRAM:DEF {0},{1}'.format(numframes, framelen)
+    inst.send_scpi_cmd(cmd)
     
+    #capture_first, capture_count = 1, numframes
+    capture_first, capture_count = 1, 1
+    cmd = ':DIG:ACQuire:FRAM:CAPT {0},{1}'.format(capture_first, capture_count)
+    inst.send_scpi_cmd(cmd)
+
+    # Choose which frames to read (all in this example)
+    inst.send_scpi_cmd(':DIG:DATA:SEL ALL')
+
+    # Choose what to read 
+    # (only the frame-data without the header in this example)
+    inst.send_scpi_cmd(':DIG:DATA:TYPE FRAM')
+
+    # Get the total data size (in bytes)
+    resp = inst.send_scpi_query(':DIG:DATA:SIZE?')
+    num_bytes = np.uint32(resp)
+    print('Total read size in bytes: ' + resp)
+
+    
+    wav1 = np.zeros(framelen, dtype=np.uint16)
     # Start the digitizer's capturing machine
     inst.send_scpi_cmd(':DIG:INIT ON')
     inst.send_scpi_cmd(':DIG:TRIG:TASK1')
@@ -342,25 +308,13 @@ def acquireData():
     # Read the data that was captured by channel 1:
     inst.send_scpi_cmd(':DIG:CHAN:SEL 1')
     rc = inst.read_binary_data(':DIG:DATA:READ?', wav1, num_bytes)
+    print(rc)
     inst.send_scpi_cmd(':DIG:INIT OFF')
     wav1 = wav1-dcOff
-    w = np.blackman(len(wav1))
-    wavFFT = w * wav1
-    #wavFFT = wav1
-    fourierTransform = np.fft.fft(wavFFT)/len(wav1)           # Normalize amplitude
-    fourierTransform = abs(fourierTransform[range(int(len(wav1)/2))]) # Exclude sampling frequency
-    tpCount     = len(wav1)
-    timeStep  = xT[1]-xT[0]
-    xF = np.fft.fftfreq(tpCount, timeStep) 
-    xF = xF[range(int(len(wav1)/2))]
-    if(spectrumInv == 1):
-        fftPlot = np.log10(fourierTransform[::-1])
-    else:
-        fftPlot = np.log10(fourierTransform)
-     
+    
     time.sleep(0.1)
-    del wav1
-    del fftPlot
+    
+    plt.plot(wav1)
     
     
 
@@ -370,9 +324,9 @@ def acquireData():
 # -------- Low Band ----------
 
 makePulseData(cycles=5)
-downLoad_waveform_lowFreq(ch=1, segnum=1)
-makePulseData(cycles=20)
 downLoad_waveform_lowFreq(ch=1, segnum=2)
+makePulseData(cycles=20)
+downLoad_waveform_lowFreq(ch=1, segnum=1)
 setTaskDUC()
 
 # -------- High Band ----------
@@ -382,3 +336,5 @@ setTaskDUC()
 
 acquireData()    
         
+
+inst.close_instrument()
