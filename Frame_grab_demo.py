@@ -26,17 +26,6 @@ spectrumInv = 0
 sampleRateDAC = 2.2E9
 sampleRateADC = (sampleRateDAC * 32) / 20 # This ratio is required for clock sync
 
-#Set number of frames to be collected
-numframes, framelen = 1, 4800
-totlen = numframes * framelen
-
-#Preallocate
-wav1 = np.zeros(framelen, dtype=np.uint16)
-fftPlot = np.zeros(int(framelen/2), dtype=np.uint16)
-xT = np.linspace(0, numframes * framelen,  numframes * framelen )
-xT =  xT/sampleRateADC
-dacWaveI = []
-dacWaveQ = []
 
 # Connect to instrument(PXI)
 sid = 4 #PXI slot of AWT on chassis
@@ -73,7 +62,6 @@ inst.send_scpi_cmd(cmd)
 inst.send_scpi_cmd(':DIG:CHAN:SEL 1') #Select channel 1
 inst.send_scpi_cmd(':DIG:CHAN:STATE ENAB') #Enable channel 1
 # Select the internal-trigger as start-capturing trigger:
-inst.send_scpi_cmd(':DIG:TRIG:SOURCE CPU')
 
 
 # Select the frames for the capturing 
@@ -84,8 +72,8 @@ def makePulseData(cycles = 10):
     global dacWaveI
     global dacWaveQ
     
-    ampI = 0.9  
-    ampQ = 0.9  
+    ampI = 0.75  
+    ampQ = 0.75 
     max_dac=65535
     half_dac=max_dac/2
     data_type = np.uint16
@@ -263,37 +251,58 @@ def setTaskDUC():
     inst.send_scpi_cmd(cmd)
     cmd = ':TASK:COMP:NEXT1 2'
     inst.send_scpi_cmd(cmd)
-
+    '''
     cmd = ':TASK:COMP:SEL 2' 
     inst.send_scpi_cmd(cmd)
     cmd = ':TASK:COMP:SEGM 2'
     inst.send_scpi_cmd(cmd)
-    cmd = ':TASK:COMP:NEXT1 1'
-    inst.send_scpi_cmd(cmd)
     cmd = ':TASK:COMP:DTR ON'
     inst.send_scpi_cmd(cmd)
-    
+    cmd = ':TASK:COMP:NEXT1 1'
+    inst.send_scpi_cmd(cmd)
     cmd = ':TASK:COMP:WRITE'
     inst.send_scpi_cmd(cmd)
+    '''    
     cmd = ':SOUR:FUNC:MODE TASK'
     inst.send_scpi_cmd(cmd)         
     
+    inst.send_scpi_cmd(':DIG:TRIG:SOURCE TASK1')
+
+    
 def acquireData():
+    
+    #Set number of frames to be collected
+    numframes, framelen = 10, 3648
+    totlen = numframes * framelen
+    
     cmd = ':DIG:ACQuire:FRAM:DEF {0},{1}'.format(numframes, framelen)
     inst.send_scpi_cmd(cmd)
     
     capture_first, capture_count = 1, numframes
     #capture_first, capture_count = 1, 1
+    # Start the digitizer's capturing machine
+    inst.send_scpi_cmd(':DIG:INIT ON')
     cmd = ':DIG:ACQuire:FRAM:CAPT {0},{1}'.format(capture_first, capture_count)
     inst.send_scpi_cmd(cmd)
+    inst.send_scpi_cmd(':DIG:INIT OFF')
 
     # Choose what to read 
     # (only the frame-data without the header in this example)
     inst.send_scpi_cmd(':DIG:DATA:TYPE FRAM')
     
     # Choose which frames to read (all in this example)
+    
+    
+    #Ver 1: This works (if numFrames = 1)
+    #inst.send_scpi_cmd(':DIG:DATA:SEL ALL')
+    
+    #Ver 2: This works (selecting a specific frame)
     inst.send_scpi_cmd(':DIG:DATA:SEL FRAM')
-    inst.send_scpi_cmd(':DIG:DATA FRAM 1,1')
+    inst.send_scpi_cmd(':DIG:DATA:FRAM 1,10')
+    
+    #Ver 3: This does not work (more than 1 frame at a time)
+    #inst.send_scpi_cmd(':DIG:DATA:SEL FRAM')
+    #inst.send_scpi_cmd(':DIG:DATA:FRAM 1,2')
     
     # Get the total data size (in bytes)
     resp = inst.send_scpi_query(':DIG:DATA:SIZE?')
@@ -301,23 +310,22 @@ def acquireData():
     print('Total read size in bytes: ' + resp)
 
     
-    wav1 = np.zeros(framelen, dtype=np.uint16)
-    # Start the digitizer's capturing machine
-    inst.send_scpi_cmd(':DIG:INIT ON')
-    inst.send_scpi_cmd(':DIG:TRIG:TASK1')
+    #wav1 = np.zeros((framelen, numframes), dtype=np.uint16)
+    wav1 = np.zeros((numframes, framelen), dtype=np.uint16)
+    
     # Stop the digitizer's capturing machine (to be on the safe side)
 
     # Read the data that was captured by channel 1:
-    inst.send_scpi_cmd(':DIG:CHAN:SEL 1')
     rc = inst.read_binary_data(':DIG:DATA:READ?', wav1, num_bytes)
     print(rc)
-    inst.send_scpi_cmd(':DIG:INIT OFF')
+    
+
+    
     wav1 = wav1-dcOff
     
     time.sleep(0.1)
     
-    plt.plot(wav1)
-    
+    return wav1
     
 
 
@@ -325,8 +333,7 @@ def acquireData():
 
 # -------- Low Band ----------
 
-makePulseData(cycles=5)
-downLoad_waveform_lowFreq(ch=1, segnum=2)
+
 makePulseData(cycles=20)
 downLoad_waveform_lowFreq(ch=1, segnum=1)
 setTaskDUC()
@@ -336,7 +343,7 @@ setTaskDUC()
 #setTaskDUC()
 
 
-acquireData()    
+wav1 = acquireData()    
         
 
 inst.close_instrument()
