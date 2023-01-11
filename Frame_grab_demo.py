@@ -17,6 +17,20 @@ import matplotlib.pyplot as plt
 from matplotlib.widgets import Button, RadioButtons, CheckButtons
 import keyboard
 
+
+###########################################################################
+# BY J. BALL, 2023/1/10-2023/1/11
+#
+# THIS PROGRAM DOES THE FOLLOWING:
+#   - GENERATES LOW-BAND (FEW-MHZ PULSE)
+#   - WRITES PULSE TO CHANNEL 1 OF TABOR PROTEUS AWT
+#   - SETS UP TASK TABLE TO REPEAT PULSE INDEFINITELY WHILE TRIGGERING DIG EACH TIME
+#   - SETS UP DIG TO COLLECT A CERTAIN NUMBER OF FRAMES WITH EACH ACQUISITION
+#   - READS THE DATA FROM THE INSTRUMENT
+#
+###########################################################################
+
+
 #Init
 breakVal = 0
 dcOff = 50
@@ -105,46 +119,6 @@ def makePulseData(cycles = 10):
     
     dacWaveQ = np.concatenate([dacWaveQ, dacWaveDC])
     
-def makeGaussPulseData(cycles = 10):
-    global dacWaveI
-    global dacWaveQ
-    
-    ampI = 1  
-    ampQ = 1 
-    max_dac=65535
-    half_dac=max_dac/2
-    data_type = np.uint16
-    
-    #Set waveform length
-    segLen = 1024 # Signal
-    segLenDC = 1024 #DC
-    
-    time = np.linspace(0, segLen-1, segLen)
-    omega = 2 * np.pi * cycles
-    dacWave = ampI*np.cos(omega*time/segLen)
-   
-    timeGuassian = np.linspace(-(segLen)/2, (segLen)/2, segLen)
-    variance=np.power(20, 2.) 
-    modWave = (np.exp(-np.power((omega*timeGuassian/segLen), 2.) / (2 * variance)))
-
-    dacWaveI = ((dacWave * modWave) + 1.0) * half_dac  
-    dacWaveI = dacWaveI.astype(data_type)
-    
-    #Set DC
-    dacWaveDC = np.zeros(segLenDC)       
-    dacWaveDC = dacWaveDC+(max_dac//2)
-    dacWaveDC = dacWaveDC.astype(np.uint16)
-    
-    dacWaveI = np.concatenate([dacWaveI, dacWaveDC])
-    
-    dacWave = ampQ*np.sin(omega*time/segLen)  
-    
-    dacWaveQ = ((dacWave * modWave) + 1.0) * half_dac  
-    
-    dacWaveQ = dacWaveQ.astype(data_type)
-    
-    dacWaveQ = np.concatenate([dacWaveQ, dacWaveDC])
-
 
 def downLoad_waveform_lowFreq(ch=1, segnum = 1):
     global dacWaveI
@@ -174,60 +148,6 @@ def downLoad_waveform_lowFreq(ch=1, segnum = 1):
     resp = inst.send_scpi_query(':SYST:ERR?')
     print(resp)
     
-
-    cmd = ':OUTP ON'
-    inst.send_scpi_cmd(cmd)
-
-
-def downLoad_waveform_highFreq(ch=1, segnum = 1):
-    global dacWaveI
-    global dacWaveQ
-    
-    arr_tuple = (dacWaveI, dacWaveQ)
-    dacWaveIQ = np.vstack(arr_tuple).reshape((-1,), order='F')
-
-    # Select channel
-    cmd = ':INST:CHAN {0}'.format(ch)
-    inst.send_scpi_cmd(cmd)
-
-    # Define segment
-    cmd = ':TRAC:DEF {0}, {1}'.format(segnum, len(dacWaveIQ))
-    inst.send_scpi_cmd(cmd)
-
-    # Select the segment
-    cmd = ':TRAC:SEL {0}'.format(segnum)
-    inst.send_scpi_cmd(cmd)
-
-    # Increase the timeout before writing binary-data:
-    inst.timeout = 30000
-    # Send the binary-data with *OPC? added to the beginning of its prefix.
-    inst.write_binary_data('*OPC?; :TRAC:DATA', dacWaveIQ)
-    # Set normal timeout
-    inst.timeout = 10000
-
-    resp = inst.send_scpi_query(':SYST:ERR?')
-    print(resp)
-    
-    # cmd = ':SOUR:INT x4'
-    # #cmd = ':SOUR:INT x8'
-    # rc = inst.send_scpi_cmd(cmd)
-
-    # sampleRateDAC = 8E8
-    # print('Sample Clk Freq {0}'.format(sampleRateDAC))
-    # cmd = ':FREQ:RAST {0}'.format(sampleRateDAC)
-    # rc = inst.send_scpi_cmd(cmd)
-
-    cmd = ':SOUR:MODE DUC'
-    rc = inst.send_scpi_cmd(cmd)
-
-    cmd = ':SOUR:IQM ONE'
-    rc = inst.send_scpi_cmd(cmd)
-
-    cmd = ':SOUR:NCO:CFR1 1E9'
-    rc = inst.send_scpi_cmd(cmd)
-
-    cmd = ':SOUR:SIXD ON'
-    rc = inst.send_scpi_cmd(cmd)
 
     cmd = ':OUTP ON'
     inst.send_scpi_cmd(cmd)
@@ -279,11 +199,13 @@ def acquireData():
     inst.send_scpi_cmd(cmd)
     
     capture_first, capture_count = 1, numframes
-    #capture_first, capture_count = 1, 1
+
     # Start the digitizer's capturing machine
     inst.send_scpi_cmd(':DIG:INIT ON')
     cmd = ':DIG:ACQuire:FRAM:CAPT {0},{1}'.format(capture_first, capture_count)
     inst.send_scpi_cmd(cmd)
+    
+    ### Stop the digitizer capture
     inst.send_scpi_cmd(':DIG:INIT OFF')
 
     # Choose what to read 
@@ -293,33 +215,30 @@ def acquireData():
     # Choose which frames to read (all in this example)
     
     
-    #Ver 1: This works (if numFrames = 1)
+    #Ver 1: This works
     #inst.send_scpi_cmd(':DIG:DATA:SEL ALL')
     
     #Ver 2: This works (selecting a specific frame)
     inst.send_scpi_cmd(':DIG:DATA:SEL FRAM')
-    inst.send_scpi_cmd(':DIG:DATA:FRAM 1,10')
+    inst.send_scpi_cmd(':DIG:DATA:FRAM 10,1')
     
-    #Ver 3: This does not work (more than 1 frame at a time)
+    #Ver 3: This works (selecting arbitrary frames)
     #inst.send_scpi_cmd(':DIG:DATA:SEL FRAM')
-    #inst.send_scpi_cmd(':DIG:DATA:FRAM 1,2')
+    #inst.send_scpi_cmd(':DIG:DATA:FRAM 2,5')
     
     # Get the total data size (in bytes)
     resp = inst.send_scpi_query(':DIG:DATA:SIZE?')
     num_bytes = np.uint32(resp)
     print('Total read size in bytes: ' + resp)
 
-    
-    #wav1 = np.zeros((framelen, numframes), dtype=np.uint16)
+    #### need to create matrix with correct dimensionality ### 
     wav1 = np.zeros((numframes, framelen), dtype=np.uint16)
     
-    # Stop the digitizer's capturing machine (to be on the safe side)
+
 
     # Read the data that was captured by channel 1:
     rc = inst.read_binary_data(':DIG:DATA:READ?', wav1, num_bytes)
     print(rc)
-    
-
     
     wav1 = wav1-dcOff
     
@@ -328,22 +247,10 @@ def acquireData():
     return wav1
     
 
-
-#makeSineData()
-
-# -------- Low Band ----------
-
-
 makePulseData(cycles=20)
 downLoad_waveform_lowFreq(ch=1, segnum=1)
 setTaskDUC()
 
-# -------- High Band ----------
-#downLoad_waveform_highFreq()
-#setTaskDUC()
-
-
 wav1 = acquireData()    
         
-
 inst.close_instrument()
