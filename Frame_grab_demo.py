@@ -27,7 +27,7 @@ sampleRateDAC = 2.2E9
 sampleRateADC = (sampleRateDAC * 32) / 20 # This ratio is required for clock sync
 
 #Set number of frames to be collected
-numframes, framelen = 2, 4800
+numframes, framelen = 1, 4800
 totlen = numframes * framelen
 
 #Preallocate
@@ -92,11 +92,6 @@ capture_first, capture_count = 1, numframes
 cmd = ':DIG:ACQuire:FRAM:CAPT {0},{1}'.format(capture_first, capture_count)
 inst.send_scpi_cmd(cmd)
 
-# Start the digitizer's capturing machine
-inst.send_scpi_cmd(':DIG:INIT ON')
-inst.send_scpi_cmd(':DIG:TRIG:IMM')
-inst.send_scpi_cmd(':DIG:INIT OFF')
-
 # Choose which frames to read (all in this example)
 inst.send_scpi_cmd(':DIG:DATA:SEL ALL')
 
@@ -108,134 +103,7 @@ inst.send_scpi_cmd(':DIG:DATA:TYPE FRAM')
 resp = inst.send_scpi_query(':DIG:DATA:SIZE?')
 num_bytes = np.uint32(resp)
 print('Total read size in bytes: ' + resp)
-print()
 
-# Read the data that was captured by channel 1:
-inst.send_scpi_cmd(':DIG:CHAN:SEL 1')
-wavlen = num_bytes // 2
-rc = inst.read_binary_data(':DIG:DATA:READ?', wav1, num_bytes)
-wav1 = wav1-dcOff
-w = np.blackman(len(wav1))
-wavFFT = w * wav1
-#wavFFT = wav1
-fourierTransform = np.fft.fft(wavFFT)/len(wav1)           # Normalize amplitude
-fourierTransform = abs(fourierTransform[range(int(len(wav1)/2))]) # Exclude sampling frequency
-tpCount     = len(wav1)
-timeStep  = xT[1]-xT[0]
-xF = np.fft.fftfreq(tpCount, timeStep) 
-xF = xF[range(int(len(wav1)/2))]
-
-if(spectrumInv == 1):
-    fftPlot = np.log10(fourierTransform[::-1])
-else:
-    fftPlot = np.log10(fourierTransform)
-
-def vMax(val):
-    global inst
-    cmd = ':DIG:CHAN:RANG HIGH'
-    inst.send_scpi_cmd(cmd)
-    range = inst.send_scpi_query(':DIG:CHAN:RANG?')
-    print('Range ' + range)
-    
-def vMed(val):
-    cmd = ':DIG:CHAN:RANG MED'
-    inst.send_scpi_cmd(cmd)
-    range = inst.send_scpi_query(':DIG:CHAN:RANG?')
-    print('Range ' + range)
-
-def vMin(val):
-    cmd = ':DIG:CHAN:RANG LOW'
-    inst.send_scpi_cmd(cmd)
-    range = inst.send_scpi_query(':DIG:CHAN:RANG?')
-    print('Range ' + range)
-    
-def freeRun(val):
-    cmd = ':DIG:TRIG:SOURCE CPU'
-    inst.send_scpi_cmd(cmd)
-    range = inst.send_scpi_query(':DIG:TRIG:SOURCE?')
-    print('Trigger ' + range)
-    
-def trigExt(val):
-    cmd = ':DIG:TRIG:SOURCE TASK1'
-    inst.send_scpi_cmd(cmd)
-    range = inst.send_scpi_query(':DIG:TRIG:SOURCE?')
-    print('Trigger ' + range)    
- 
-def dc(val):
-    ax2.set_xticklabels(['', '0Hz', '562MHz', '1124MHz', '1686MHz', '2248MHz', '2810MHz'])
-    global spectrumInv
-    spectrumInv = 0; 
-
-def two(val):
-    ax2.set_xticklabels(['', '2700MHz', '3268MHz', '3824MHz', '4386MHz', '4948MHz', '5510MHz'])
-    global spectrumInv
-    spectrumInv = 1;
-
-def five(val):
-    ax2.set_xticklabels(['', '5400MHz', '5962MHz', '6524MHz', '7086MHz', '7648MHz', '8210MHz'])
-    global spectrumInv
-    spectrumInv = 0;
-
-def eight(val):
-    ax2.set_xticklabels(['', '8100MHz', '8662MHz', '9225MHz', '9787MHz', '10350MHz', '10910MHz'])
-    global spectrumInv
-    spectrumInv = 1;
-    
-def exitLoop(val):
-    global breakVal
-    breakVal = 1
-
-
-# Run GUI event loop
-plt.ion()
-  
-# Create sub plots
-figure, ax1 = plt.subplots(2)
-line1, = ax1[0].plot(xT, wav1-dcOff, color="yellow")
-line2, = ax1[1].plot(xF, fftPlot, color="yellow")
-
-# setting x-axis label and y-axis label
-ax1[0].set(xlabel='Time = (Pts/'+ str(sampleRateDAC)+')', ylabel='Amplitude = (ADCRng/4096)')
-ax1[0].set_position([0.2, 0.55, 0.7, 0.35]) #x, y, w, h]
-ax1[0].set_ylim([0,4096])
-ax1[0].set(facecolor = "black")
-ax1[0].grid()
-
-ax1[1].set(xlabel='Frequency', ylabel='FFT Amplitude')
-ax1[1].set_position([0.2, 0.1, 0.7, 0.35]) #x, y, w, h]
-ax1[1].set_ylim([0,1000])
-ax1[1].set_xlim([0,60e6])
-ax1[1].set(facecolor = "black")
-ax1[1].grid()
-
-xAnchor = 0.04
-yAnchor = 0.33
-
-ax1_button_500 = plt.axes([xAnchor, 0.85 , 0.03,0.05]) #xposition, yposition, width and height
-grid_button_500 = Button(ax1_button_500, 'Max', color = 'white', hovercolor = 'grey')
-grid_button_500.on_clicked(vMax)
-
-ax1_button_800 = plt.axes([xAnchor+0.035, 0.85 , 0.03,0.05]) #xposition, yposition, width and height
-grid_button_800 = Button(ax1_button_800, 'Med', color = 'white', hovercolor = 'grey')
-grid_button_800.on_clicked(vMed)
-
-ax1_button_1000 = plt.axes([xAnchor+(0.035*2), 0.85 , 0.03,0.05]) #xposition, yposition, width and height
-grid_button_1000 = Button(ax1_button_1000, 'Min', color = 'white', hovercolor = 'grey')
-grid_button_1000.on_clicked(vMin)
-
-
-yAnchor = 0.7
-ax3_button_free = plt.axes([0.04, yAnchor , 0.1,0.05]) #xposition, yposition, width and height
-grid_button_free = Button(ax3_button_free, 'Free Run', color = 'white', hovercolor = 'grey')
-grid_button_free.on_clicked(freeRun)
-
-ax3_button_trig = plt.axes([0.04, yAnchor-0.075 , 0.1,0.05]) #xposition, yposition, width and height
-grid_button_trig = Button(ax3_button_trig, 'Trigger', color = 'white', hovercolor = 'grey')
-grid_button_trig.on_clicked(trigExt)
-
-ax3_button_exit = plt.axes([0.04, yAnchor-(0.075*3) , 0.1,0.05]) #xposition, yposition, width and height
-grid_button_exit = Button(ax3_button_exit, 'Exit', color = 'white', hovercolor = 'grey')
-grid_button_exit.on_clicked(exitLoop)
 
 def makeSineData():
     global dacWaveI
@@ -266,7 +134,7 @@ def makeSineData():
     
     dacWaveQ = dacWaveQ.astype(data_type)
     
-def makePulseData():
+def makePulseData(cycles = 10):
     global dacWaveI
     global dacWaveQ
     
@@ -280,7 +148,7 @@ def makePulseData():
     segLen = 1024 # Signal
     segLenDC = 1024 #DC
     
-    cycles = 10
+
     time = np.linspace(0, segLen-1, segLen)
     omega = 2 * np.pi * cycles
     dacWave = ampI*np.cos(omega*time/segLen)
@@ -368,7 +236,7 @@ def downLoad_waveform_lowFreq(ch=1, segnum = 1):
     inst.write_binary_data('*OPC?; :TRAC:DATA', dacWaveIQ)
     # Set normal timeout
     inst.timeout = 10000
-
+    print('writing waveform to CH {0}'.format(ch))
     resp = inst.send_scpi_query(':SYST:ERR?')
     print(resp)
     
@@ -454,8 +322,6 @@ def setTaskDUC():
     inst.send_scpi_cmd(cmd)
     cmd = ':TASK:COMP:SEGM 2'
     inst.send_scpi_cmd(cmd)
-    cmd = ':TASK:COMP:DTR ON'
-    inst.send_scpi_cmd(cmd)
     cmd = ':TASK:COMP:NEXT1 1'
     inst.send_scpi_cmd(cmd)
     
@@ -472,7 +338,7 @@ def acquireData():
     inst.send_scpi_cmd(':DIG:INIT ON')
     inst.send_scpi_cmd(':DIG:TRIG:TASK1')
     # Stop the digitizer's capturing machine (to be on the safe side)
-    inst.send_scpi_cmd(':DIG:INIT OFF')
+    
 
     # Read the data that was captured by channel 1:
     inst.send_scpi_cmd(':DIG:CHAN:SEL 1')
@@ -492,33 +358,19 @@ def acquireData():
         fftPlot = np.log10(fourierTransform[::-1])
     else:
         fftPlot = np.log10(fourierTransform)
-
-    
-    # Plot the samples
-    # updating data values
-    line1.set_xdata(xT)
-    line1.set_ydata(wav1-dcOff) #Subtracting offset twice? 
-    line2.set_xdata(xF)
-    line2.set_ydata(fourierTransform)
-    
-    # drawing updated values
-    figure.canvas.draw()
-  
-    # This will run the GUI event
-    # loop until all UI events
-    # currently waiting have been processed
-    figure.canvas.flush_events()
      
     time.sleep(0.1)
     del wav1
     del fftPlot
+    
+    inst.send_scpi_cmd(':DIG:INIT OFF')
 
 
 #makeSineData()
 
 # -------- Low Band ----------
 
-makePulseData(cycles=10)
+makePulseData(cycles=5)
 downLoad_waveform_lowFreq(ch=1, segnum=1)
 makePulseData(cycles=20)
 downLoad_waveform_lowFreq(ch=1, segnum=2)
@@ -529,18 +381,5 @@ setTaskDUC()
 #setTaskDUC()
 
 
-while True:
-    try:
-        if keyboard.is_pressed(' '):
-            print("Stop initiated...")
-            break
-        if(breakVal==1):
-            print("Stop initiated...")
-            break
-    
-        acquireData()    
+acquireData()    
         
-    except:
-        break
-
-inst.close_instrument()
