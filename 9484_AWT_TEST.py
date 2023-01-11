@@ -235,6 +235,31 @@ ax3_button_exit = plt.axes([0.04, yAnchor-(0.075*3) , 0.1,0.05]) #xposition, ypo
 grid_button_exit = Button(ax3_button_exit, 'Exit', color = 'white', hovercolor = 'grey')
 grid_button_exit.on_clicked(exitLoop)
 
+def makeTriggerMarker():
+    # makes a marker with no associated waveform
+    global dacWaveI
+    global dacWaveQ
+    global markerDat
+    
+    ampI = 1  
+    ampQ = 1
+    max_dac=65535
+    half_dac=max_dac/2
+    data_type = np.uint16
+    
+    #Set marker length
+    segLenOn = 512 # Signal
+
+    dacWave = np.zeros(segLenOn)
+    dacWaveI = ((dacWave) + 1.0) * half_dac  
+    dacWaveI = dacWaveI.astype(data_type)    
+    daceWaveQ = dacWaveI
+    
+    markerOn = np.ones(int(segLenOn/8))
+    markerDat = ((markerOn) + 1.0) * half_dac
+
+    markerDat = markerDat.astype(data_type)
+
 def makeSineData():
     global dacWaveI
     global dacWaveQ
@@ -248,7 +273,7 @@ def makeSineData():
     #Set waveform length
     segLen = 1024 # Signal
     
-    cycles = 10
+    cycles = 20
     time = np.linspace(0, segLen-1, segLen)
     omega = 2 * np.pi * cycles
     dacWave = ampI*np.cos(omega*time/segLen)
@@ -267,6 +292,7 @@ def makeSineData():
 def makePulseData():
     global dacWaveI
     global dacWaveQ
+    global markerDat
     
     ampI = 1  
     ampQ = 1  
@@ -278,7 +304,7 @@ def makePulseData():
     segLen = 1024 # Signal
     segLenDC = 1024 #DC
     
-    cycles = 10
+    cycles = 20
     time = np.linspace(0, segLen-1, segLen)
     omega = 2 * np.pi * cycles
     dacWave = ampI*np.cos(omega*time/segLen)
@@ -301,6 +327,15 @@ def makePulseData():
     
     dacWaveQ = np.concatenate([dacWaveQ, dacWaveDC])
     
+    markerOn = np.ones(int(segLen/8))
+    markerOn = ((markerOn) + 1.0) * half_dac
+    
+    markerOff = np.zeros(int(segLenDC/8))
+    markerOff = ((markerOff) + 1.0) * half_dac 
+    
+    markerDat = np.concatenate([markerOn, markerOff])    
+    markerDat = markerDat.astype(data_type)
+      
 def makeGaussPulseData():
     global dacWaveI
     global dacWaveQ
@@ -346,6 +381,7 @@ def makeGaussPulseData():
 def downLoad_IQ_DUC_low():
     global dacWaveI
     global dacWaveQ
+    global markerDat
     
     
     dacWaveIQ = dacWaveI
@@ -375,6 +411,9 @@ def downLoad_IQ_DUC_low():
     resp = inst.send_scpi_query(':SYST:ERR?')
     print(resp)
     
+    cmd = ':MARK:SEL 1'
+    inst.send_scpi_cmd(cmd)
+    inst.write_binary_data('*OPC?; :MARK:DATA', markerDat) 
 
     cmd = ':OUTP ON'
     inst.send_scpi_cmd(cmd)
@@ -626,12 +665,12 @@ makePulseData()
 #makeGaussPulseData()
 
 # -------- Low Band ----------
-#downLoad_IQ_DUC_low()
-#setTaskDUC()
+downLoad_IQ_DUC_low()
+setTaskDUC()
 
 # -------- High Band ----------
-downLoad_IQ_DUC_high()
-setTaskDUC()
+#downLoad_IQ_DUC_high()
+#setTaskDUC()
 
 # -------- Two-channel IQ ----------
 #downLoad_I()
