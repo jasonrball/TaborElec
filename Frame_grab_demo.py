@@ -93,7 +93,7 @@ cmd = ':DIG:ACQuire:FRAM:CAPT {0},{1}'.format(capture_first, capture_count)
 inst.send_scpi_cmd(cmd)
 
 # Choose which frames to read (all in this example)
-inst.send_scpi_cmd(':DIG:DATA:SEL ALL')
+inst.send_scpi_cmd(':DIG:DATA:SEL 1')
 
 # Choose what to read 
 # (only the frame-data without the header in this example)
@@ -338,12 +338,11 @@ def acquireData():
     inst.send_scpi_cmd(':DIG:INIT ON')
     inst.send_scpi_cmd(':DIG:TRIG:TASK1')
     # Stop the digitizer's capturing machine (to be on the safe side)
-    
 
     # Read the data that was captured by channel 1:
     inst.send_scpi_cmd(':DIG:CHAN:SEL 1')
-
     rc = inst.read_binary_data(':DIG:DATA:READ?', wav1, num_bytes)
+    inst.send_scpi_cmd(':DIG:INIT OFF')
     wav1 = wav1-dcOff
     w = np.blackman(len(wav1))
     wavFFT = w * wav1
@@ -363,7 +362,7 @@ def acquireData():
     del wav1
     del fftPlot
     
-    inst.send_scpi_cmd(':DIG:INIT OFF')
+    
 
 
 #makeSineData()
