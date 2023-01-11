@@ -63,6 +63,7 @@ inst.send_scpi_cmd(':TRAC:DEL:ALL')
 
 # Setup the digitizer 
 print('Setting up Digitizer..') 
+inst.send_scpi_cmd('DIG:ACQ:ZERO:ALL 0')
 inst.send_scpi_cmd(':DIG:MODE SING') #set digitizer mode (single or double)
 print('ADC Clk Freq {0}'.format(sampleRateADC))
 cmd = ':DIG:FREQ  {0}'.format(sampleRateADC)
@@ -281,18 +282,19 @@ def acquireData():
     cmd = ':DIG:ACQuire:FRAM:DEF {0},{1}'.format(numframes, framelen)
     inst.send_scpi_cmd(cmd)
     
-    #capture_first, capture_count = 1, numframes
-    capture_first, capture_count = 1, 1
+    capture_first, capture_count = 1, numframes
+    #capture_first, capture_count = 1, 1
     cmd = ':DIG:ACQuire:FRAM:CAPT {0},{1}'.format(capture_first, capture_count)
     inst.send_scpi_cmd(cmd)
-
-    # Choose which frames to read (all in this example)
-    inst.send_scpi_cmd(':DIG:DATA:SEL ALL')
 
     # Choose what to read 
     # (only the frame-data without the header in this example)
     inst.send_scpi_cmd(':DIG:DATA:TYPE FRAM')
-
+    
+    # Choose which frames to read (all in this example)
+    inst.send_scpi_cmd(':DIG:DATA:SEL FRAM')
+    inst.send_scpi_cmd(':DIG:DATA FRAM 1,1')
+    
     # Get the total data size (in bytes)
     resp = inst.send_scpi_query(':DIG:DATA:SIZE?')
     num_bytes = np.uint32(resp)
